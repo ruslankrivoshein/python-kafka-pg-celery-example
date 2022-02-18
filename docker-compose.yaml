@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: monitor_pgadmin
+    restart: always
+    ports:
+      - "15432:80"
+    env_file: .env
+    volumes:
+      - monitor_pgadmin:/var/lib/pgadmin/
+
+  redis-commander:
+    container_name: monitor_redis-commander
+    image: rediscommander/redis-commander:latest
+    restart: always
+    ports:
+      - "8081:8081"
+
+  portainer:
+    image: portainer/portainer:latest
+    container_name: monitor_portainer
+    restart: always
+    ports:
+      - "9000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - monitor_portainer:/data/
+
+  flower:
+    image: mher/flower
+    container_name: monitor_flower
+    restart: always
+    ports:
+      - "8888:8888"
+    env_file: .env
+    command: ["celery", "flower", "--port=8888"]
+
+  celery:
+    build: .
+    image: monitor_app
+    container_name: monitor_celery
+    restart: always
+    env_file: .env
+    volumes:
+      - ./src/:/usr/src/app/
+      - ./conf.d/kafka_ssl/:/usr/src/conf.d/kafka_ssl/
+    command: ["celery", "worker"]
+
+  celerybeat:
+    image: monitor_app
+    container_name: monitor_celerybeat
+    restart: always
+    env_file: .env
+    volumes:
+      - ./src/:/usr/src/app/
+      - ./conf.d/kafka_ssl/:/usr/src/conf.d/kafka_ssl/
+    command: ["celery", "-A", "tasks", "beat"]
+    depends_on:
+      - celery
+
+  transporter:
+    image: monitor_app
+    container_name: monitor_transporter
+    restart: always
+    env_file: .env
+    volumes:
+      - ./src/:/usr/src/app/
+      - ./conf.d/kafka_ssl/:/usr/src/conf.d/kafka_ssl/
+    command: ["python", "data_transfer.py"]
+
+volumes:
+  monitor_pgadmin:
+    external: true
+  monitor_portainer:
+    external: true
